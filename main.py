@@ -48,7 +48,7 @@ def make_system_prompt(mode: str) -> str:
 # ---------- Gemini ----------
 def ask_gemini(mode: str, text: str) -> str:
     response = client_gemini.models.generate_content(
-        model="gemini-1.5-flash-001",
+        model="gemini-1.5-flash",
         contents=[make_system_prompt(mode), text]
     )
     return response.text or "No Gemini reply"
@@ -60,11 +60,16 @@ def safe_ask(mode: str, text: str):
 
     if now >= GEMINI_BLOCKED_UNTIL:
         try:
-            return ask_gemini(mode, text), "gemini"
+            print("🟢 Trying Gemini...")
+            reply = ask_gemini(mode, text)
+            print("🟢 Gemini SUCCESS")
+            return reply, "gemini"
         except Exception as e:
+            print("🔴 Gemini FAILED:", str(e))
             if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
                 GEMINI_BLOCKED_UNTIL = now + 120
 
+    print("🟡 Using Google fallback")
     return google_fallback_answer(text), "google"
 
 # ================= API =================
