@@ -1,2 +1,33 @@
-# shunya-sensei
-Shunya Sensei is a cloud-based AI chat assistant designed for clarity, simplicity, and reliable answers. It uses Google Gemini as the primary AI model and automatically falls back to web-based search (DuckDuckGo) when AI responses are unavailable or insufficient The goal is to provide stable, distraction-free chat intelligence without complexity.. 
+# Shunya Sensei
+
+Shunya Sensei is a minimal, cloud-ready AI-style backend that answers user questions via an API.
+
+## Features
+- FastAPI backend
+- huging face ai
+- Question → Answer system
+- DuckDuckGo based fallback logic
+- No voice, no UI dependency
+- Mobile & cloud friendly
+
+## Tech Stack
+- Python
+- FastAPI
+- DuckDuckGo Search
+- Render compatible
+
+## API
+POST /chat  
+Body:
+{
+  "message": "your question"
+}
+
+Response:
+{
+  "reply": "answer"
+}
+
+## Status
+✅ Local server working  
+🚀 Ready for cloud deployment

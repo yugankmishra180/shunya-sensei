@@ -83,3 +83,15 @@ Rules:
 - If 8 lines cannot be maintained, DO NOT ANSWER
 """
 }
+
+def make_system_prompt(mode: str) -> str:
+    base = BASE_PERSONA.strip()
+
+    instruction = mode_instructions.get(mode)
+
+    if instruction:
+        return base + "\n\n" + instruction.strip()
+
+    # fallback if mode not found
+    return base 
+

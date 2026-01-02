@@ -1,11 +1,13 @@
 # google_fallback.py
 # -------------------
-# Simple Google-like fallback using DuckDuckGo
+# Simple Google-like fallback using DuckDuckGo (updated for ddgs)
 
-from duckduckgo_search import DDGS
-
+from ddgs import DDGS  # updated import
 
 def google_fallback_answer(query: str) -> str:
+    """
+    Returns top 2 DuckDuckGo results as fallback answer.
+    """
     try:
         with DDGS() as ddgs:
             results = ddgs.text(query, max_results=3)
@@ -24,5 +26,6 @@ def google_fallback_answer(query: str) -> str:
 
         return "🔎 Google fallback se exact answer nahi mila."
 
-    except Exception:
+    except Exception as e:
+        print("⚠ Google fallback error:", e)
         return "⚠ Google fallback temporary unavailable."

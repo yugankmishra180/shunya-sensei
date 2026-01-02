@@ -1,109 +1,106 @@
 # ==============================
-# main.py — Shunya Sensei (FINAL)
+# main.py — Shunya Sensei (HF)
 # ==============================
 
 import os
-import time
+import requests
 from typing import Optional
 
-from dotenv import load_dotenv
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import uvicorn
-
-import google.generativeai as genai
+from dotenv import load_dotenv
+from duckduckgo_search import DDGS
 
 from modes import BASE_PERSONA, mode_instructions
-from mood import detect_mood
-from google_fallback import google_fallback_answer
-
 
 # ---------- ENV ----------
 load_dotenv()
+HF_API_KEY = os.getenv("HF_API_KEY")
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if not GEMINI_API_KEY:
-    raise RuntimeError("GEMINI_API_KEY missing")
-
-
-# ---------- Gemini Setup ----------
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-1.0-pro")
-
-
-# ---------- Cooldown ----------
-GEMINI_BLOCKED_UNTIL = 0
-
-
-# ---------- FastAPI ----------
-app = FastAPI(title="Shunya Sensei API", version="1.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+# ---------- APP ----------
+app = FastAPI(
+    title="Shunya Sensei API",
+    version="2.0"
 )
 
-
-# ---------- Prompt ----------
-def make_system_prompt(mode: str) -> str:
-    instruction = mode_instructions.get(mode, "")
-    return BASE_PERSONA + "\n" + instruction
-
-
-# ---------- Gemini ----------
-def ask_gemini(mode: str, text: str) -> str:
-    print("🟢 Trying Gemini...")
-    response = model.generate_content(
-        make_system_prompt(mode) + "\n" + text
-    )
-    print("🟢 Gemini SUCCESS")
-    return response.text
-
-
-# ---------- Smart Router ----------
-def safe_ask(mode: str, text: str):
-    global GEMINI_BLOCKED_UNTIL
-    now = time.time()
-
-    if now >= GEMINI_BLOCKED_UNTIL:
-        try:
-            reply = ask_gemini(mode, text)
-            return reply, "gemini"
-        except Exception as e:
-            print("🔴 Gemini FAILED:", str(e))
-            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                GEMINI_BLOCKED_UNTIL = now + 120
-
-    return google_fallback_answer(text), "google"
-
-
-# ================= API =================
-
+# ---------- MODEL ----------
 class ChatRequest(BaseModel):
-    message: str
+    text: str
     mode: Optional[str] = "teacher"
 
+# ---------- PROMPT ----------
+def make_system_prompt(mode: str) -> str:
+    return BASE_PERSONA + "\n" + mode_instructions.get(mode, "")
 
-@app.post("/chat")
-def chat_api(req: ChatRequest):
-    mode = req.mode or "teacher"
-    reply, source = safe_ask(mode, req.message)
-    emoji = detect_mood(req.message)
+# ---------- HF ----------
+def ask_hf(prompt: str) -> Optional[str]:
+    if not HF_API_KEY:
+        return None
 
-    return {
-        "reply": f"{emoji} {reply}",
-        "source": source
+    url = "https://api-inference.huggingface.co/models/google/flan-t5-base"
+    headers = {
+        "Authorization": f"Bearer {HF_API_KEY}"
+    }
+    payload = {
+        "inputs": prompt,
+        "parameters": {
+            "max_new_tokens": 300,
+            "temperature": 0.4
+        }
     }
 
+    try:
+        res = requests.post(url, headers=headers, json=payload, timeout=30)
+        if res.status_code != 200:
+            return None
 
+        data = res.json()
+        if isinstance(data, list) and "generated_text" in data[0]:
+            return data[0]["generated_text"]
 
-# ================= ENTRY =================
-if __name__ == "__main__":
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=int(os.getenv("PORT", 10000))
-    )
+        return None
+    except Exception:
+        return None
+
+# ---------- DUCKDUCKGO ----------
+def ask_duckduckgo(query: str) -> str:
+    try:
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=3))
+
+        if not results:
+            return "😐 No useful data found."
+
+        ans = ""
+        for r in results:
+            ans += f"- {r.get('body','')}\n"
+        return ans
+    except Exception:
+        return "⚠️ DuckDuckGo failed."
+
+# ---------- SAFE ASK ----------
+def safe_ask(mode: str, text: str) -> str:
+    system_prompt = make_system_prompt(mode)
+    full_prompt = f"{system_prompt}\n\nQuestion:\n{text}\n\nAnswer:"
+
+    hf_answer = ask_hf(full_prompt)
+    if hf_answer:
+        return hf_answer.strip()
+
+    # fallback
+    ddg = ask_duckduckgo(text)
+    return f"{system_prompt}\n\n### Answer (Search Based)\n{ddg}"
+
+# ---------- ROUTE ----------
+@app.post("/chat")
+def chat(req: ChatRequest):
+    reply = safe_ask(req.mode or "teacher", req.text)
+    return {
+        "reply": reply,
+        "mode": req.mode,
+        "source": "huggingface + duckduckgo"
+    }
+
+@app.get("/")
+def root():
+    return {"status": "Shunya Sensei running ✅"}
