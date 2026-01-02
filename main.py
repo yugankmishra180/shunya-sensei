@@ -47,9 +47,13 @@ def make_system_prompt(mode: str) -> str:
 
 # ---------- Gemini ----------
 def ask_gemini(mode: str, text: str) -> str:
+    print("🟢 Trying Gemini...")
     response = client_gemini.models.generate_content(
-        model="gemini-1.5-flash",
-        contents=[make_system_prompt(mode), text]
+        model="models/gemini-1.0-pro",
+        contents=[
+            make_system_prompt(mode),
+            text
+        ]
     )
     return response.text or "No Gemini reply"
 
