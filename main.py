@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
 
-from google import genai
+import google.generativeai as genai
 from modes import BASE_PERSONA, mode_instructions
 from mood import detect_mood
 from google_fallback import google_fallback_answer
@@ -25,7 +25,8 @@ if not GEMINI_API_KEY:
     raise RuntimeError("GEMINI_API_KEY missing")
 
 # ---------- Gemini Client ----------
-client_gemini = genai.Client(api_key=GEMINI_API_KEY)
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel("gemini-pro")
 
 # ---------- Cooldown ----------
 GEMINI_BLOCKED_UNTIL = 0  # unix time
@@ -48,14 +49,11 @@ def make_system_prompt(mode: str) -> str:
 # ---------- Gemini ----------
 def ask_gemini(mode: str, text: str) -> str:
     print("🟢 Trying Gemini...")
-    response = client_gemini.models.generate_content(
-        model="models/gemini-1.0-pro",
-        contents=[
-            make_system_prompt(mode),
-            text
-        ]
+    response = model.generate_content(
+        make_system_prompt(mode) + "\n" + text
     )
-    return response.text or "No Gemini reply"
+    print("🟢 Gemini SUCCESS")
+    return response.text
 
 # ---------- Smart Router ----------
 def safe_ask(mode: str, text: str):
